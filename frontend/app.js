@@ -3,7 +3,8 @@
  * SPA dengan auth, CRUD jadwal, sync, dan owner panel
  */
 
-// Perubahan alamat API ke server Render Cloud
+// Alamat API (Ubah komentar di bawah untuk pindah antara lokal dan Render Cloud)
+// const API_BASE = 'http://localhost:3000/api';
 const API_BASE = 'https://hypecheck-pro.onrender.com/api';
 
 // ─── State ───────────────────────────────────────────────────
