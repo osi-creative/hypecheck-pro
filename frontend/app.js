@@ -216,9 +216,13 @@ const App = {
     document.getElementById('auth-page').classList.remove('active');
     document.getElementById('navbar').style.display = 'flex';
     document.getElementById('bottom-nav').style.display = 'flex';
-    this.navTo('dashboard');
+    
+    // Resume last page instead of always picking dashboard
+    const lastPage = localStorage.getItem('sp_current_page') || 'dashboard';
+    this.navTo(lastPage);
+    
     this.loadSchedules();
-    this.renderProfile();
+    // renderProfile already called by navTo if lastPage was profile
     if (State.isOnline) this.syncNow();
   },
 
@@ -302,6 +306,7 @@ const App = {
     localStorage.removeItem('sp_token');
     localStorage.removeItem('sp_user');
     localStorage.removeItem('sp_last_sync');
+    localStorage.removeItem('sp_current_page');
     localDB.clearAll().catch(() => {});
     this.showAuth(); // Menampilkan form auth lalu reset isinya
     
@@ -312,6 +317,10 @@ const App = {
     const regForm = document.getElementById('register-form');
     if (regForm) regForm.reset();
 
+    // Pembersihan eksplisit karena autofill kadang bandel
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    
     toast('Berhasil keluar', 'info');
   },
 
@@ -328,6 +337,11 @@ const App = {
     document.getElementById(`${page}-page`)?.classList.add('active');
     if (document.getElementById(`nav-${page}`)) {
       document.getElementById(`nav-${page}`).classList.add('active');
+    }
+
+    // Simpan halaman terakhir ke localStorage
+    if (page !== 'owner' || State.user?.role === 'owner') {
+      localStorage.setItem('sp_current_page', page);
     }
 
     // Load page data
