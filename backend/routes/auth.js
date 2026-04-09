@@ -14,6 +14,7 @@ router.post('/register', authLimiter, register);
 router.post('/login', authLimiter, login);
 router.get('/me', authenticate, getMe);
 router.put('/me/theme', authenticate, updateTheme);
+router.put('/me/profile', authenticate, updateProfile);
 router.put('/me/push-subscription', authenticate, updatePushSubscription);
 
 module.exports = router;

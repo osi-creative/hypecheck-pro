@@ -248,6 +248,7 @@ const App = {
       localStorage.setItem('sp_user', JSON.stringify(State.user));
 
       toast('Login berhasil! Selamat datang 👋', 'success');
+      e.target.reset(); // Reset form login
       this.showApp();
     } catch (err) {
       toast(err.message, 'error');
@@ -281,6 +282,7 @@ const App = {
       localStorage.setItem('sp_user', JSON.stringify(State.user));
 
       toast('Registrasi berhasil! Selamat datang 🎉', 'success');
+      e.target.reset(); // Reset form registrasi
       this.showApp();
     } catch (err) {
       toast(err.message, 'error');
@@ -300,6 +302,13 @@ const App = {
     localStorage.removeItem('sp_last_sync');
     localDB.clearAll().catch(() => {});
     this.showAuth();
+    
+    // Reset semua input form auth agar kosong saat logout
+    ['login-username', 'login-password', 'reg-name', 'reg-username', 'reg-phone', 'reg-password', 'reg-code'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
     toast('Berhasil keluar', 'info');
   },
 
@@ -735,9 +744,10 @@ const App = {
     roleBadge.textContent = user.role === 'owner' ? '👑 Owner' : '👤 User';
     roleBadge.className = `badge ${user.role === 'owner' ? 'badge-in-progress' : 'badge-not-started'}`;
 
-    // Show owner section
-    if (user.role === 'owner') {
-      document.getElementById('owner-section').style.display = 'block';
+    // Show owner section only for owner/admin
+    const ownerSection = document.getElementById('owner-section');
+    if (ownerSection) {
+      ownerSection.style.display = user.role === 'owner' ? 'block' : 'none';
     }
 
     // Last sync
@@ -752,6 +762,49 @@ const App = {
     if (toggle) toggle.checked = current === 'dark';
 
     lucide.createIcons();
+  },
+
+  openEditProfileModal() {
+    const user = State.user;
+    if (!user) return;
+    document.getElementById('p-name').value = user.name || '';
+    document.getElementById('p-phone').value = user.phone || '';
+    document.getElementById('p-password').value = '';
+    document.getElementById('profile-modal').classList.add('open');
+    lucide.createIcons();
+  },
+
+  closeEditProfileModal() {
+    document.getElementById('profile-modal').classList.remove('open');
+  },
+
+  async handleProfileUpdate(e) {
+    e.preventDefault();
+    const btn = document.getElementById('save-profile-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true;
+
+    try {
+      const payload = {
+        name: document.getElementById('p-name').value.trim(),
+        phone: document.getElementById('p-phone').value.trim(),
+        password: document.getElementById('p-password').value,
+      };
+
+      const res = await api('/me/profile', { method: 'PUT', body: payload });
+      State.user = res.data.user;
+      localStorage.setItem('sp_user', JSON.stringify(State.user));
+      
+      this.renderProfile();
+      this.closeEditProfileModal();
+      toast('Profil berhasil diperbarui ✨', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
   },
 
   async requestPushPermission() {

@@ -155,4 +155,33 @@ const updatePushSubscription = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, updateTheme, updatePushSubscription };
+const updateProfile = async (req, res) => {
+  try {
+    const schema = Joi.object({
+      name: Joi.string().min(2).max(100),
+      phone: Joi.string().pattern(/^[0-9]+$/).min(9).max(15),
+      password: Joi.string().min(6).allow('', null),
+    });
+
+    const { error, value } = schema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, message: error.details[0].message });
+    }
+
+    const { name, phone, password } = value;
+    const updates = {};
+    if (name) updates.name = name;
+    if (phone) updates.phone = phone;
+    if (password && password.trim() !== '') {
+      updates.password = await bcrypt.hash(password, 12);
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true });
+    res.json({ success: true, message: 'Profil berhasil diperbarui', data: { user } });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+module.exports = { register, login, getMe, updateTheme, updatePushSubscription, updateProfile };
