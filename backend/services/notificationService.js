@@ -21,12 +21,18 @@ const sendWhatsApp = async (phone, message) => {
   }
 
   try {
+    let targetPhone = phone.replace(/\D/g, '');
+    if (targetPhone.startsWith('0')) {
+      targetPhone = '62' + targetPhone.substring(1);
+    } else if (!targetPhone.startsWith('62')) {
+      targetPhone = '62' + targetPhone;
+    }
+
     const response = await axios.post(
       'https://api.fonnte.com/send',
       {
-        target: phone,
+        target: targetPhone,
         message: message,
-        countryCode: '62',
       },
       {
         headers: {

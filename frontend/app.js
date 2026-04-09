@@ -168,11 +168,12 @@ const escHtml = (str) => {
 const App = {
   // ─── Init ────────────────────────────────────────────────
   async init() {
-    // Register Service Worker
+    // Memaksa unregister Service Worker lama untuk membersihkan cache yang nyangkut
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-      navigator.serviceWorker.addEventListener('message', (e) => {
-        if (e.data.type === 'BACKGROUND_SYNC') App.syncNow();
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
       });
     }
 
