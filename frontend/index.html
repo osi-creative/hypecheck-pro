@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Schedule Pro — Aplikasi penjadwalan personal dengan notifikasi WhatsApp dan dukungan offline." />
+  <title>Schedule Pro — Jadwal Pintar</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Dexie.js (IndexedDB) -->
+  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────── */
+    :root {
+      --bg-primary:    #0f172a;
+      --bg-secondary:  #1e293b;
+      --bg-tertiary:   #334155;
+      --bg-card:       rgba(30, 41, 59, 0.8);
+      --bg-glass:      rgba(15, 23, 42, 0.6);
+
+      --accent:        #6366f1;
+      --accent-light:  #818cf8;
+      --accent-dark:   #4f46e5;
+      --success:       #10b981;
+      --warning:       #f59e0b;
+      --danger:        #ef4444;
+      --info:          #3b82f6;
+
+      --text-primary:  #f1f5f9;
+      --text-secondary:#94a3b8;
+      --text-muted:    #64748b;
+
+      --border:        rgba(99, 102, 241, 0.2);
+      --border-light:  rgba(148, 163, 184, 0.1);
+
+      --radius-sm:     8px;
+      --radius-md:     12px;
+      --radius-lg:     16px;
+      --radius-xl:     24px;
+
+      --shadow-sm:     0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md:     0 4px 20px rgba(0,0,0,0.4);
+      --shadow-lg:     0 10px 40px rgba(0,0,0,0.5);
+      --shadow-accent: 0 4px 20px rgba(99,102,241,0.3);
+
+      --transition:    0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="light"] {
+      --bg-primary:    #f8fafc;
+      --bg-secondary:  #ffffff;
+      --bg-tertiary:   #f1f5f9;
+      --bg-card:       rgba(255, 255, 255, 0.9);
+      --bg-glass:      rgba(248, 250, 252, 0.8);
+
+      --text-primary:  #0f172a;
+      --text-secondary:#475569;
+      --text-muted:    #94a3b8;
+
+      --border:        rgba(99, 102, 241, 0.2);
+      --border-light:  rgba(15, 23, 42, 0.08);
+    }
+
+    /* ─── Reset & Base ──────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    /* ─── Animated Background ───────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 80%, rgba(16,185,129,0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app { position: relative; z-index: 1; min-height: 100vh; }
+
+    /* ─── Toast Notifications ───────────────────────────── */
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 360px;
+    }
+
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow-lg);
+      animation: slideIn 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.error   { border-left: 3px solid var(--danger); }
+    .toast.warning { border-left: 3px solid var(--warning); }
+    .toast.info    { border-left: 3px solid var(--info); }
+
+    .toast-icon { font-size: 18px; flex-shrink: 0; }
+    .toast-msg  { font-size: 14px; font-weight: 500; }
+
+    @keyframes slideIn {
+      from { transform: translateX(110%); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to   { transform: translateX(110%); opacity: 0; }
+    }
+
+    /* ─── Navbar ────────────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-light);
+      padding: 0 20px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .navbar-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: var(--shadow-accent);
+    }
+
+    .navbar-title {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(to right, var(--text-primary), var(--accent-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ─── Bottom Nav (Mobile) ───────────────────────────── */
+    #bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border-light);
+      padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: space-around;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      transition: all var(--transition);
+      color: var(--text-muted);
+      border: none;
+      background: none;
+      font-family: 'Inter', sans-serif;
+      text-decoration: none;
+    }
+
+    .nav-item.active {
+      color: var(--accent);
+    }
+
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .nav-item span {
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* ─── Pages ─────────────────────────────────────────── */
+    .page {
+      display: none;
+      padding: 80px 20px 100px;
+      max-width: 800px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+
+    .page.active { display: block; animation: fadeIn 0.3s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── Auth Pages ─────────────────────────────────────── */
+    #auth-page {
+      display: none;
+      min-height: 100vh;
+      padding: 0;
+      max-width: none;
+    }
+
+    #auth-page.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-container {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .auth-logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .auth-logo-icon {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin: 0 auto 16px;
+      box-shadow: var(--shadow-accent);
+    }
+
+    .auth-logo h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(to right, var(--text-primary), var(--accent-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .auth-logo p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .auth-tab-switcher {
+      display: flex;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border-light);
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all var(--transition);
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .auth-tab.active {
+      background: var(--accent);
+      color: white;
+      box-shadow: var(--shadow-accent);
+    }
+
+    /* ─── Card ───────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* ─── Form Elements ──────────────────────────────────── */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      transition: all var(--transition);
+      outline: none;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-select option { background: var(--bg-secondary); }
+    .form-textarea { resize: vertical; min-height: 80px; }
+
+    /* ─── Buttons ────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all var(--transition);
+      font-family: 'Inter', sans-serif;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: white;
+      box-shadow: var(--shadow-accent);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-light);
+    }
+
+    .btn-secondary:hover { background: var(--bg-card); }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+    .btn-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-icon {
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-icon:hover { color: var(--text-primary); background: var(--bg-card); }
+    .btn-icon svg { width: 18px; height: 18px; }
+
+    .btn-full { width: 100%; }
+    .btn-sm { padding: 8px 14px; font-size: 13px; }
+
+    /* ─── Status Badge ───────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-not-started { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .badge-in-progress { background: rgba(245,158,11,0.15);  color: #f59e0b; }
+    .badge-completed   { background: rgba(16,185,129,0.15);  color: #10b981; }
+
+    /* ─── Schedule Card ──────────────────────────────────── */
+    .schedule-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      transition: all var(--transition);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .schedule-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--accent);
+    }
+
+    .schedule-card.status-in_progress::before { background: var(--warning); }
+    .schedule-card.status-completed::before   { background: var(--success); }
+    .schedule-card.status-not_started::before { background: var(--text-muted); }
+
+    .schedule-card:hover {
+      border-color: var(--border);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .schedule-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .schedule-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .schedule-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .schedule-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .schedule-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .schedule-meta-item svg { width: 13px; height: 13px; }
+
+    .schedule-actions {
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+
+    .schedule-card:hover .schedule-actions { opacity: 1; }
+
+    /* ─── Section Header ─────────────────────────────────── */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .section-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* ─── Stats Cards ────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+
+    .stat-number {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─── Modal ──────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes modalIn {
+      from { transform: scale(0.9) translateY(20px); opacity: 0; }
+      to   { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 24px 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .modal-body { padding: 0 24px; }
+    .modal-footer { padding: 20px 24px 24px; display: flex; gap: 12px; justify-content: flex-end; }
+
+    /* ─── Sync Status Bar ────────────────────────────────── */
+    #sync-bar {
+      position: fixed;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 200;
+      transition: all var(--transition);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #sync-bar.visible { opacity: 1; pointer-events: auto; }
+    #sync-bar.syncing { background: rgba(59,130,246,0.15); color: var(--info); border: 1px solid rgba(59,130,246,0.3); }
+    #sync-bar.synced  { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+    #sync-bar.error   { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+    #sync-bar.offline { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+
+    /* ─── Tabs ───────────────────────────────────────────── */
+    .tab-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-light);
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      transition: all var(--transition);
+      font-family: 'Inter', sans-serif;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+      box-shadow: var(--shadow-accent);
+    }
+
+    /* ─── Empty State ────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .empty-state p { font-size: 14px; }
+
+    /* ─── Loading Spinner ────────────────────────────────── */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ─── Reminder Items ─────────────────────────────────── */
+    .reminder-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+    }
+
+    .reminder-item input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+    }
+
+    /* ─── Repeat Rules ───────────────────────────────────── */
+    .repeat-rules { display: flex; flex-direction: column; gap: 8px; }
+
+    .repeat-rule-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+    }
+
+    .repeat-rule-item select, .repeat-rule-item input {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      padding: 6px 10px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+    }
+
+    .repeat-rule-item select:focus, .repeat-rule-item input:focus {
+      border-color: var(--accent);
+    }
+
+    /* ─── Toggle Switch ──────────────────────────────────── */
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .toggle-switch input { display: none; }
+
+    .toggle-track {
+      width: 44px;
+      height: 24px;
+      background: var(--bg-tertiary);
+      border-radius: 999px;
+      position: relative;
+      transition: background var(--transition);
+      border: 1px solid var(--border-light);
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: transform var(--transition);
+    }
+
+    .toggle-switch input:checked + .toggle-track {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .toggle-switch input:checked + .toggle-track::after {
+      transform: translateX(20px);
+    }
+
+    /* ─── Owner User List ────────────────────────────────── */
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+
+    .user-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .user-info { flex: 1; min-width: 0; }
+    .user-name { font-weight: 600; font-size: 15px; }
+    .user-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ─── Deadline Color ─────────────────────────────────── */
+    .deadline-urgent { color: var(--danger) !important; }
+    .deadline-soon   { color: var(--warning) !important; }
+    .deadline-ok     { color: var(--text-muted) !important; }
+
+    /* ─── Mobile Responsive ──────────────────────────────── */
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat-number { font-size: 22px; }
+      .modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-height: 85vh; }
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .page { padding: 80px 16px 100px; }
+    }
+
+    /* ─── Scrollbar ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ─── Separator ──────────────────────────────────────── */
+    .separator {
+      border: none;
+      border-top: 1px solid var(--border-light);
+      margin: 16px 0;
+    }
+
+    .schedules-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .profile-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      margin: 0 auto 16px;
+      box-shadow: var(--shadow-accent);
+    }
+
+    .code-display {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-align: center;
+      color: var(--accent-light);
+    }
+  </style>
+</head>
+<body>
+  <div id="toast-container"></div>
+
+  <div id="app">
+    <!-- ─── Auth Page ──────────────────────────────────── -->
+    <div id="auth-page" class="page active">
+      <div class="auth-container">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">📅</div>
+          <h1>Schedule Pro</h1>
+          <p>Jadwal pintar, hidup lebih teratur</p>
+        </div>
+
+        <div class="auth-tab-switcher">
+          <button class="auth-tab active" id="tab-login" onclick="App.showAuthTab('login')">Masuk</button>
+          <button class="auth-tab" id="tab-register" onclick="App.showAuthTab('register')">Daftar</button>
+        </div>
+
+        <!-- Login Form -->
+        <div class="card" id="form-login">
+          <form id="login-form" onsubmit="App.handleLogin(event)">
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" id="login-username" class="form-input" placeholder="Masukkan username" required autocomplete="username" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" id="login-password" class="form-input" placeholder="Masukkan password" required autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+              <span>Masuk</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Register Form -->
+        <div class="card" id="form-register" style="display:none;">
+          <form id="register-form" onsubmit="App.handleRegister(event)">
+            <div class="form-group">
+              <label class="form-label">Nama Lengkap</label>
+              <input type="text" id="reg-name" class="form-input" placeholder="Nama lengkap Anda" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" id="reg-username" class="form-input" placeholder="Pilih username unik" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nomor WA (62xxx)</label>
+              <input type="tel" id="reg-phone" class="form-input" placeholder="628123456789" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" id="reg-password" class="form-input" placeholder="Minimal 6 karakter" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Kode Registrasi</label>
+              <input type="text" id="reg-code" class="form-input" placeholder="Masukkan kode dari admin" required style="text-transform:uppercase;" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="register-btn">
+              <span>Daftar Sekarang</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Main App (setelah login) ──────────────────── -->
+    <!-- Navbar -->
+    <nav id="navbar" style="display:none;">
+      <a class="navbar-brand" href="#">
+        <div class="navbar-logo">📅</div>
+        <span class="navbar-title">Schedule Pro</span>
+      </a>
+      <div class="navbar-actions">
+        <div id="sync-indicator" style="font-size:12px;color:var(--text-muted);"></div>
+        <button class="btn-icon" id="theme-toggle" onclick="App.toggleTheme()" title="Ganti tema">
+          <i data-lucide="moon"></i>
+        </button>
+        <button class="btn-icon" onclick="App.logout()" title="Keluar">
+          <i data-lucide="log-out"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Dashboard Page -->
+    <div id="dashboard-page" class="page">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Dashboard</h1>
+          <p class="section-subtitle" id="dashboard-greeting">Selamat datang!</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="App.openScheduleModal()">
+          <i data-lucide="plus"></i> Tambah
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-total" style="color:var(--accent)">0</div>
+          <div class="stat-label">Total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-inprogress" style="color:var(--warning)">0</div>
+          <div class="stat-label">Dikerjakan</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-completed" style="color:var(--success)">0</div>
+          <div class="stat-label">Selesai</div>
+        </div>
+      </div>
+
+      <h2 style="font-size:16px;font-weight:600;color:var(--text-secondary);margin-bottom:16px;">Jadwal Mendatang</h2>
+      <div id="upcoming-list" class="schedules-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📭</div>
+          <h3>Belum ada jadwal</h3>
+          <p>Mulai tambah jadwal pertama Anda</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedules Page -->
+    <div id="schedules-page" class="page">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Jadwal</h1>
+          <p class="section-subtitle">Kelola semua jadwal Anda</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="App.openScheduleModal()">
+          <i data-lucide="plus"></i> Tambah
+        </button>
+      </div>
+
+      <div class="tab-group">
+        <button class="tab-btn active" onclick="App.filterSchedules('all', this)">Semua</button>
+        <button class="tab-btn" onclick="App.filterSchedules('not_started', this)">Belum Mulai</button>
+        <button class="tab-btn" onclick="App.filterSchedules('in_progress', this)">Dikerjakan</button>
+        <button class="tab-btn" onclick="App.filterSchedules('completed', this)">Selesai</button>
+      </div>
+
+      <div id="schedules-list" class="schedules-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>Belum ada jadwal</h3>
+          <p>Tambah jadwal baru untuk memulai</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Page -->
+    <div id="profile-page" class="page">
+      <h1 class="section-title" style="margin-bottom:24px;">Profil</h1>
+
+      <div class="card" style="text-align:center;margin-bottom:20px;">
+        <div class="profile-avatar" id="profile-avatar">?</div>
+        <h2 id="profile-name" style="font-size:20px;font-weight:700;"></h2>
+        <p id="profile-username" style="color:var(--text-secondary);font-size:14px;margin-top:4px;"></p>
+        <p id="profile-phone" style="color:var(--text-muted);font-size:13px;margin-top:4px;"></p>
+        <span id="profile-role-badge" class="badge" style="margin-top:12px;"></span>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;">Pengaturan</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light);">
+          <div>
+            <div style="font-weight:500;">Mode Gelap</div>
+            <div style="font-size:12px;color:var(--text-muted);">Tema aplikasi</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="theme-toggle-profile" onchange="App.toggleTheme()" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;">
+          <div>
+            <div style="font-weight:500;">Notifikasi Push</div>
+            <div style="font-size:12px;color:var(--text-muted);">Aktifkan push notification</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="App.requestPushPermission()">Aktifkan</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;">Sinkronisasi</h3>
+        <p id="last-sync-text" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Belum tersinkron</p>
+        <button class="btn btn-secondary btn-full" onclick="App.syncNow()">
+          <i data-lucide="refresh-cw"></i> Sync Sekarang
+        </button>
+      </div>
+
+      <div id="owner-section" style="display:none;">
+        <div class="card" style="border-color:rgba(99,102,241,0.4);">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:16px;color:var(--accent);">
+            👑 Panel Owner
+          </h3>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <button class="btn btn-primary btn-full" onclick="App.navTo('owner')">
+              <i data-lucide="users"></i> Kelola Pengguna
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:16px;"></div>
+      <button class="btn btn-danger btn-full" onclick="App.logout()">
+        <i data-lucide="log-out"></i> Keluar
+      </button>
+    </div>
+
+    <!-- Owner Page -->
+    <div id="owner-page" class="page">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Panel Owner</h1>
+          <p class="section-subtitle">Kelola pengguna & kode registrasi</p>
+        </div>
+        <button class="btn-icon" onclick="App.navTo('profile')">
+          <i data-lucide="arrow-left"></i>
+        </button>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+        <button class="tab-btn active" onclick="App.ownerTab('users', this)">Pengguna</button>
+        <button class="tab-btn" onclick="App.ownerTab('codes', this)">Kode Registrasi</button>
+      </div>
+
+      <!-- Users List -->
+      <div id="owner-users">
+        <div style="margin-bottom:16px;">
+          <button class="btn btn-primary btn-sm" onclick="App.refreshUserList()">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+        <div id="user-list">
+          <div class="empty-state">
+            <p>Memuat data...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Codes List -->
+      <div id="owner-codes" style="display:none;">
+        <div style="margin-bottom:16px;">
+          <button class="btn btn-primary" onclick="App.openGenerateCodeModal()">
+            <i data-lucide="key"></i> Generate Kode Baru
+          </button>
+        </div>
+        <div id="code-list">
+          <div class="empty-state">
+            <p>Memuat kode...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Bottom Nav ──────────────────────────────── -->
+    <nav id="bottom-nav" style="display:none;">
+      <button class="nav-item active" id="nav-dashboard" onclick="App.navTo('dashboard')">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" id="nav-schedules" onclick="App.navTo('schedules')">
+        <i data-lucide="calendar-days"></i>
+        <span>Jadwal</span>
+      </button>
+      <button class="nav-item" id="nav-profile" onclick="App.navTo('profile')">
+        <i data-lucide="user-circle-2"></i>
+        <span>Profil</span>
+      </button>
+    </nav>
+
+    <!-- Sync Status Bar -->
+    <div id="sync-bar">
+      <span id="sync-bar-icon">⟳</span>
+      <span id="sync-bar-text">Menyinkronkan...</span>
+    </div>
+  </div>
+
+  <!-- ─── Schedule Modal ──────────────────────────── -->
+  <div class="modal-overlay" id="schedule-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Tambah Jadwal</h2>
+        <button class="btn-icon" onclick="App.closeScheduleModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="schedule-form" onsubmit="App.handleScheduleSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Judul *</label>
+            <input type="text" id="s-title" class="form-input" placeholder="Judul jadwal..." required maxlength="200" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deskripsi</label>
+            <textarea id="s-desc" class="form-textarea" placeholder="Deskripsi tambahan..." maxlength="1000"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deadline *</label>
+            <input type="datetime-local" id="s-deadline" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select id="s-status" class="form-select">
+              <option value="not_started">Belum Dimulai</option>
+              <option value="in_progress">Sedang Dikerjakan</option>
+              <option value="completed">Selesai</option>
+            </select>
+          </div>
+
+          <hr class="separator" />
+
+          <div class="form-group">
+            <label class="form-label">Pengingat</label>
+            <div id="reminders-list" class="reminder-list"></div>
+            <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="App.addReminderInput()">
+              <i data-lucide="bell-plus"></i> Tambah Pengingat
+            </button>
+          </div>
+
+          <hr class="separator" />
+
+          <div class="form-group">
+            <label class="toggle-switch" style="margin-bottom:12px;">
+              <input type="checkbox" id="s-repeat-toggle" onchange="App.toggleRepeat(this.checked)" />
+              <div class="toggle-track"></div>
+              <span style="font-size:14px;font-weight:500;">Jadwal Berulang</span>
+            </label>
+            <div id="repeat-section" style="display:none;">
+              <div id="repeat-rules-list" class="repeat-rules"></div>
+              <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="App.addRepeatRule()">
+                <i data-lucide="plus"></i> Tambah Hari
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.closeScheduleModal()">Batal</button>
+        <button type="submit" form="schedule-form" class="btn btn-primary" id="save-schedule-btn">
+          <span>Simpan</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Generate Code Modal ────────────────────── -->
+  <div class="modal-overlay" id="code-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Generate Kode Registrasi</h2>
+        <button class="btn-icon" onclick="App.closeCodeModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="code-result" style="display:none;margin-bottom:20px;">
+          <label class="form-label">Kode Berhasil Dibuat</label>
+          <div class="code-display" id="generated-code">—</div>
+        </div>
+        <form id="code-form" onsubmit="App.handleGenerateCode(event)">
+          <div class="form-group">
+            <label class="form-label">Maksimal Penggunaan</label>
+            <input type="number" id="code-max-usage" class="form-input" value="1" min="1" max="1000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Berlaku (hari)</label>
+            <input type="number" id="code-expires-days" class="form-input" value="30" min="1" max="365" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Catatan (opsional)</label>
+            <input type="text" id="code-note" class="form-input" placeholder="Kode untuk..." maxlength="200" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.closeCodeModal()">Tutup</button>
+        <button type="submit" form="code-form" class="btn btn-primary" id="generate-code-btn">
+          <i data-lucide="key"></i> Generate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
