@@ -302,13 +302,14 @@ const App = {
     localStorage.removeItem('sp_user');
     localStorage.removeItem('sp_last_sync');
     localDB.clearAll().catch(() => {});
-    this.showAuth();
+    this.showAuth(); // Menampilkan form auth lalu reset isinya
     
-    // Reset semua input form auth agar kosong saat logout
-    ['login-username', 'login-password', 'reg-name', 'reg-username', 'reg-phone', 'reg-password', 'reg-code'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
+    // Force reset form forms untuk mengatasi browser autofill
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.reset();
+    
+    const regForm = document.getElementById('register-form');
+    if (regForm) regForm.reset();
 
     toast('Berhasil keluar', 'info');
   },

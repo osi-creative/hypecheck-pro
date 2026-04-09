@@ -1351,7 +1351,16 @@
     </div>
   </div>
 
-  <script src="db.js"></script>
-  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+  </script>
+  <script src="db.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
