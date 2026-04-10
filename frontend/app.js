@@ -300,26 +300,47 @@ const App = {
 
   logout() {
     if (!confirm('Yakin ingin keluar?')) return;
+    
+    // Bersihkan state aplikasi
     State.token = null;
     State.user = null;
     State.schedules = [];
+    
+    // Bersihkan storage
     localStorage.removeItem('sp_token');
     localStorage.removeItem('sp_user');
     localStorage.removeItem('sp_last_sync');
     localStorage.removeItem('sp_current_page');
+    
+    // Bersihkan database lokal
     localDB.clearAll().catch(() => {});
-    this.showAuth(); // Menampilkan form auth lalu reset isinya
     
-    // Force reset form forms untuk mengatasi browser autofill
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) loginForm.reset();
-    
-    const regForm = document.getElementById('register-form');
-    if (regForm) regForm.reset();
+    // Fungsi untuk membersihkan semua input form secara paksa
+    const clearInputs = () => {
+      const ids = [
+        'login-username', 'login-password', 
+        'reg-name', 'reg-username', 'reg-phone', 'reg-password', 'reg-code'
+      ];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.value = '';
+          el.setAttribute('value', ''); 
+        }
+      });
+      // Reset form secara keseluruhan
+      document.getElementById('login-form')?.reset();
+      document.getElementById('register-form')?.reset();
+    };
 
-    // Pembersihan eksplisit karena autofill kadang bandel
-    document.getElementById('login-username').value = '';
-    document.getElementById('login-password').value = '';
+    // Bersihkan sekarang
+    clearInputs();
+    
+    // Pindah ke halaman auth
+    this.showAuth();
+
+    // Bersihkan lagi setelah sedikit delay (mengatasi browser autofill yang bandel)
+    setTimeout(clearInputs, 100);
     
     toast('Berhasil keluar', 'info');
   },
